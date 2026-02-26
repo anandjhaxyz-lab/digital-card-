@@ -30,10 +30,16 @@ export default function PreviewCard({ profile }: PreviewCardProps) {
   const [sharePhone, setSharePhone] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
 
+  const getShareUrl = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('shared', 'true');
+    return url.toString();
+  };
+
   const handleWhatsappDirectShare = () => {
     if (!sharePhone) return;
     const fullNumber = `${countryCode.replace('+', '')}${sharePhone.replace(/\D/g, '')}`;
-    const text = `Hello! Check out my digital visiting card: ${window.location.href}`;
+    const text = `Hello! Check out my digital visiting card: ${getShareUrl()}`;
     window.open(`https://wa.me/${fullNumber}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -62,18 +68,19 @@ END:VCARD`;
   };
 
   const handleShare = async () => {
+    const shareUrl = getShareUrl();
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${profile.name} - ${profile.title}`,
           text: `Check out my digital business card: ${profile.name}, ${profile.title} at ${profile.company}`,
-          url: window.location.href,
+          url: shareUrl,
         });
       } catch (error) {
         console.error('Error sharing:', error);
       }
     } else {
-      navigator.clipboard.writeText(window.location.href);
+      navigator.clipboard.writeText(shareUrl);
       alert('Link copied to clipboard!');
     }
   };
@@ -342,7 +349,7 @@ END:VCARD`;
             <h3 className="text-xl font-bold mb-6 text-gray-900">Scan to Connect</h3>
             <div className="p-4 bg-white rounded-2xl border-2 border-gray-100">
               <QRCodeSVG 
-                value={window.location.href} 
+                value={getShareUrl()} 
                 size={200}
                 fgColor={profile.themeColor || '#000000'}
               />

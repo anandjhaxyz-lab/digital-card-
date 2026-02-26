@@ -46,6 +46,8 @@ const defaultProfile: UserProfile = {
 };
 
 export default function App() {
+  const isSharedView = new URLSearchParams(window.location.search).get('shared') === 'true';
+
   const [profile, setProfile] = useState<UserProfile>(() => {
     // Try to load from URL hash first
     if (window.location.hash) {
@@ -62,16 +64,26 @@ export default function App() {
   });
   
   // If we loaded from URL, we should default to Preview mode
-  const [isEditing, setIsEditing] = useState(!window.location.hash);
+  const [isEditing, setIsEditing] = useState(!window.location.hash && !isSharedView);
 
   useEffect(() => {
+    if (isSharedView) return; // Don't update local storage or hash if we are just viewing a shared card
+
     // Save to local storage
     localStorage.setItem('visitingCardProfile', JSON.stringify(profile));
     
     // Update URL hash so the current URL is shareable
     const encodedProfile = btoa(encodeURIComponent(JSON.stringify(profile)));
     window.history.replaceState(null, '', `#${encodedProfile}`);
-  }, [profile]);
+  }, [profile, isSharedView]);
+
+  if (isSharedView) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center py-8">
+        <PreviewCard profile={profile} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-900">
