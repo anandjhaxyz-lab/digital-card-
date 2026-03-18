@@ -148,21 +148,6 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
           {/* Basic Info */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Basic Information</h3>
-            <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <label className="block text-sm font-bold text-blue-900 mb-1">Custom Card Link</label>
-              <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                <span className="pl-3 text-gray-400 text-sm whitespace-nowrap">{window.location.origin}/</span>
-                <input 
-                  type="text" 
-                  name="slug"
-                  value={profile.slug || ''}
-                  onChange={handleChange}
-                  placeholder="TheNationalTailors"
-                  className="w-full py-2 px-1 text-sm focus:outline-none font-medium"
-                />
-              </div>
-              <p className="mt-1 text-xs text-blue-700">This will be your personalized link (e.g., {window.location.origin}/yourname)</p>
-            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
               <InputGroup icon={User} label="Full Name" name="name" placeholder="John Doe" />
               <InputGroup icon={Briefcase} label="Job Title" name="title" placeholder="Software Engineer" />
