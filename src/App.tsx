@@ -46,32 +46,66 @@ const defaultProfile: UserProfile = {
 };
 
 export default function App() {
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    // Try to load from URL hash first (for shared links)
-    if (window.location.hash) {
-      try {
-        const hashData = decodeURIComponent(atob(window.location.hash.substring(1)));
-        return JSON.parse(hashData);
-      } catch (e) {
-        console.error('Failed to parse profile from URL', e);
-      }
-    }
-    // Fallback to local storage
-    const saved = localStorage.getItem('visitingCardProfile');
-    return saved ? JSON.parse(saved) : defaultProfile;
-  });
-
-  const isSharedView = new URLSearchParams(window.location.search).get('shared') === 'true';
+  const urlParams = new URLSearchParams(window.location.search);
+  const sharedId = urlParams.get('id');
+  const isSharedView = urlParams.get('shared') === 'true';
   
-  // If we have a hash, we should default to Preview mode
-  const [isEditing, setIsEditing] = useState(!window.location.hash && !isSharedView);
+  // Detect slug from path (e.g., /TheNationalTailors)
+  const path = window.location.pathname.substring(1);
+  const slugFromPath = path && !path.includes('/') && !path.startsWith('api') ? path : null;
+  const identifier = sharedId || slugFromPath;
+
+  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
+  const [loading, setLoading] = useState(!!identifier);
+  
+  // If we have an identifier, we should default to Preview mode
+  const [isEditing, setIsEditing] = useState(!identifier && !isSharedView);
 
   useEffect(() => {
-    if (isSharedView) return; // Don't update local storage if we are just viewing a shared card
+    async function loadProfile() {
+      if (identifier) {
+        try {
+          const response = await fetch(`/api/profiles/${identifier}`);
+          if (response.ok) {
+            const data = await response.json();
+            setProfile(data);
+          } else {
+            console.error('Failed to fetch profile');
+          }
+        } catch (e) {
+          console.error('Error loading profile:', e);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        // Fallback to local storage if no identifier
+        const saved = localStorage.getItem('visitingCardProfile');
+        if (saved) {
+          try {
+            setProfile(JSON.parse(saved));
+          } catch (e) {
+            console.error('Failed to parse saved profile', e);
+          }
+        }
+      }
+    }
+    loadProfile();
+  }, [identifier]);
+
+  useEffect(() => {
+    if (isSharedView || identifier) return; // Don't update local storage if we are just viewing a shared card
 
     // Save to local storage
     localStorage.setItem('visitingCardProfile', JSON.stringify(profile));
-  }, [profile, isSharedView]);
+  }, [profile, isSharedView, identifier]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   if (isSharedView) {
     return (
@@ -149,7 +183,7 @@ export default function App() {
           {/* Preview Section */}
           <div className={`w-full lg:w-1/2 flex justify-center sticky top-24 transition-all duration-300 ${!isEditing ? 'block' : 'hidden lg:block'}`}>
             <div className="w-full max-w-md transform transition-transform duration-500 hover:scale-[1.02]">
-              <PreviewCard profile={profile} isSharedView={false} />
+              <PreviewCard profile={profile} isSharedView={false} onProfileUpdate={setProfile} />
             </div>
           </div>
         </div>
