@@ -23,24 +23,75 @@ import {
 
 interface PreviewCardProps {
   profile: UserProfile;
+  isSharedView?: boolean;
+  onProfileUpdate?: (profile: UserProfile) => void;
 }
 
-export default function PreviewCard({ profile }: PreviewCardProps) {
+export default function PreviewCard({ profile, isSharedView = false, onProfileUpdate }: PreviewCardProps) {
   const [showQR, setShowQR] = useState(false);
   const [sharePhone, setSharePhone] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
+  const [isSaving, setIsSaving] = useState(false);
+  const [qrUrl, setQrUrl] = useState('');
 
-  const getShareUrl = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('shared', 'true');
-    return url.toString();
+  const saveProfile = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile),
+      });
+      if (response.ok) {
+        const { id, slug } = await response.json();
+        
+        // Update local profile with the ID from server
+        if (onProfileUpdate && profile.id !== id) {
+          onProfileUpdate({ ...profile, id });
+        }
+
+        const url = new URL(window.location.origin);
+        if (slug) {
+          url.pathname = `/${slug}`;
+        } else {
+          url.searchParams.set('id', id);
+          url.searchParams.set('shared', 'true');
+        }
+        return url.toString();
+      } else {
+        const errorData = await response.json();
+        if (errorData.error) {
+          alert(errorData.error);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to save profile:', e);
+    } finally {
+      setIsSaving(false);
+    }
+    return null;
   };
 
-  const handleWhatsappDirectShare = () => {
-    if (!sharePhone) return;
+  const handleWhatsappDirectShare = async () => {
+    if (!sharePhone || isSaving) return;
+    
+    const shareUrl = await saveProfile();
+    if (!shareUrl) {
+      alert('Failed to generate share link. Please try again.');
+      return;
+    }
+
     const fullNumber = `${countryCode.replace('+', '')}${sharePhone.replace(/\D/g, '')}`;
-    const text = `Hello! Check out my digital visiting card: ${getShareUrl()}`;
+    const text = `Hello! Check out my digital visiting card: ${shareUrl}`;
     window.open(`https://wa.me/${fullNumber}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleShowQR = async () => {
+    setShowQR(true);
+    const shareUrl = await saveProfile();
+    if (shareUrl) {
+      setQrUrl(shareUrl);
+    }
   };
 
   const generateVCard = () => {
@@ -68,7 +119,13 @@ END:VCARD`;
   };
 
   const handleShare = async () => {
-    const shareUrl = getShareUrl();
+    if (isSaving) return;
+    const shareUrl = await saveProfile();
+    if (!shareUrl) {
+      alert('Failed to generate share link. Please try again.');
+      return;
+    }
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -78,6 +135,8 @@ END:VCARD`;
         });
       } catch (error) {
         console.error('Error sharing:', error);
+        navigator.clipboard.writeText(shareUrl);
+        alert('Link copied to clipboard!');
       }
     } else {
       navigator.clipboard.writeText(shareUrl);
@@ -92,7 +151,7 @@ END:VCARD`;
   };
 
   return (
-    <div className="w-full max-w-md mx-auto bg-white h-[800px] sm:rounded-3xl shadow-2xl overflow-hidden relative font-sans text-gray-800 flex flex-col">
+    <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-xl h-[800px] sm:rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white/40 overflow-hidden relative font-sans text-gray-800 flex flex-col z-10">
       <div className="flex-1 overflow-y-auto pb-24 custom-scrollbar">
         {/* Header Background / Cover Image */}
         <div 
@@ -104,7 +163,7 @@ END:VCARD`;
         >
           <div className="absolute inset-0 bg-black/10"></div>
           <button 
-            onClick={() => setShowQR(true)}
+            onClick={handleShowQR}
             className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-colors text-white z-10"
             aria-label="Show QR Code"
           >
@@ -129,40 +188,46 @@ END:VCARD`;
             <p className="text-sm text-gray-500">{profile.company || 'Your Company'}</p>
           </div>
 
-          {/* WhatsApp Share Box */}
-          <div className="mb-8 bg-gray-50 p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3 text-center">Share this card via WhatsApp</h3>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="flex flex-1 rounded-xl overflow-hidden border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-[#25D366] focus-within:border-transparent transition-all">
-                <select 
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  className="bg-gray-50 border-r border-gray-200 px-3 py-3 text-gray-700 text-sm font-medium focus:outline-none cursor-pointer"
-                >
-                  <option value="+91">IN (+91)</option>
-                  <option value="+1">US (+1)</option>
-                  <option value="+44">UK (+44)</option>
-                  <option value="+61">AU (+61)</option>
-                  <option value="+971">AE (+971)</option>
-                </select>
-                <input 
-                  type="tel" 
-                  value={sharePhone}
-                  onChange={(e) => setSharePhone(e.target.value)}
-                  placeholder="WhatsApp Number" 
-                  className="flex-1 px-4 py-3 text-sm focus:outline-none w-full"
-                />
+          {/* WhatsApp Share Box - Hidden in Shared View */}
+          {!isSharedView && (
+            <div className="mb-8 bg-gray-50 p-4 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3 text-center">Share this card via WhatsApp</h3>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-1 rounded-xl overflow-hidden border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-[#25D366] focus-within:border-transparent transition-all">
+                  <select 
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    className="bg-gray-50 border-r border-gray-200 px-3 py-3 text-gray-700 text-sm font-medium focus:outline-none cursor-pointer"
+                  >
+                    <option value="+91">IN (+91)</option>
+                    <option value="+1">US (+1)</option>
+                    <option value="+44">UK (+44)</option>
+                    <option value="+61">AU (+61)</option>
+                    <option value="+971">AE (+971)</option>
+                  </select>
+                  <input 
+                    type="tel" 
+                    value={sharePhone}
+                    onChange={(e) => setSharePhone(e.target.value)}
+                    placeholder="WhatsApp Number" 
+                    className="flex-1 px-4 py-3 text-sm focus:outline-none w-full"
+                  />
+                </div>
+                  <button 
+                    onClick={handleWhatsappDirectShare}
+                    disabled={!sharePhone || isSaving}
+                    className="bg-[#25D366] hover:bg-[#1DA851] disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
+                  >
+                    {isSaving ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <MessageCircle size={18} />
+                    )}
+                    {isSaving ? 'Saving...' : 'Share Now'}
+                  </button>
               </div>
-              <button 
-                onClick={handleWhatsappDirectShare}
-                disabled={!sharePhone}
-                className="bg-[#25D366] hover:bg-[#1DA851] disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
-              >
-                <MessageCircle size={18} />
-                Share Now
-              </button>
             </div>
-          </div>
+          )}
 
           {/* Primary Actions */}
           <div className="flex flex-col gap-3 mb-8">
@@ -219,9 +284,9 @@ END:VCARD`;
               <div className="space-y-4">
                 {profile.services.map((service) => (
                   <div key={service.id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                    {service.imageUrl && (
+                    {service.imageUrl ? (
                       <img src={service.imageUrl} alt={service.title} className="w-full h-40 object-cover" referrerPolicy="no-referrer" />
-                    )}
+                    ) : null}
                     <div className="p-4">
                       <div className="flex justify-between items-start mb-2">
                         <h3 className="font-bold text-gray-900">{service.title}</h3>
@@ -249,7 +314,13 @@ END:VCARD`;
               <div className="grid grid-cols-2 gap-3">
                 {profile.gallery.map((item) => (
                   <div key={item.id} className="aspect-square rounded-xl overflow-hidden bg-gray-100">
-                    <img src={item.url} alt="Gallery item" className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                    {item.url ? (
+                      <img src={item.url} alt="Gallery item" className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <ImageIcon size={24} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -348,11 +419,17 @@ END:VCARD`;
           <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center">
             <h3 className="text-xl font-bold mb-6 text-gray-900">Scan to Connect</h3>
             <div className="p-4 bg-white rounded-2xl border-2 border-gray-100">
-              <QRCodeSVG 
-                value={getShareUrl()} 
-                size={200}
-                fgColor={profile.themeColor || '#000000'}
-              />
+              {qrUrl ? (
+                <QRCodeSVG 
+                  value={qrUrl} 
+                  size={200}
+                  fgColor={profile.themeColor || '#000000'}
+                />
+              ) : (
+                <div className="w-[200px] h-[200px] flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              )}
             </div>
             <p className="mt-6 text-sm text-gray-500 text-center">
               Point your camera at the QR code<br/>to view this digital card.

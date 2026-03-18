@@ -35,6 +35,17 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
     onChange({ ...profile, [name]: value });
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'avatarUrl' | 'coverUrl') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onChange({ ...profile, [field]: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const InputGroup = ({ icon: Icon, label, name, type = 'text', placeholder }: any) => (
     <div className="mb-4">
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -108,7 +119,7 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-2xl mx-auto font-sans">
+    <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/20 p-6 md:p-8 max-w-2xl mx-auto font-sans relative z-10">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Edit Your Card</h2>
       
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
@@ -137,12 +148,67 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
           {/* Basic Info */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Basic Information</h3>
+            <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
+              <label className="block text-sm font-bold text-blue-900 mb-1">Custom Card Link</label>
+              <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                <span className="pl-3 text-gray-400 text-sm whitespace-nowrap">{window.location.origin}/</span>
+                <input 
+                  type="text" 
+                  name="slug"
+                  value={profile.slug || ''}
+                  onChange={handleChange}
+                  placeholder="TheNationalTailors"
+                  className="w-full py-2 px-1 text-sm focus:outline-none font-medium"
+                />
+              </div>
+              <p className="mt-1 text-xs text-blue-700">This will be your personalized link (e.g., {window.location.origin}/yourname)</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
               <InputGroup icon={User} label="Full Name" name="name" placeholder="John Doe" />
               <InputGroup icon={Briefcase} label="Job Title" name="title" placeholder="Software Engineer" />
               <InputGroup icon={Building2} label="Company" name="company" placeholder="Acme Corp" />
-              <InputGroup icon={ImageIcon} label="Avatar URL" name="avatarUrl" placeholder="https://example.com/avatar.jpg" />
-              <InputGroup icon={ImageIcon} label="Cover Image URL" name="coverUrl" placeholder="https://example.com/cover.jpg" />
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Profile Picture</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                    {profile.avatarUrl ? (
+                      <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-full h-full p-2 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'avatarUrl')}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cover Picture</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-12 rounded bg-gray-200 overflow-hidden flex-shrink-0">
+                    {profile.coverUrl ? (
+                      <img src={profile.coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-full h-full p-2 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'coverUrl')}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
             <InputGroup icon={User} label="Bio" name="bio" type="textarea" placeholder="A short bio about yourself..." />
           </section>

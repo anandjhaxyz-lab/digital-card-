@@ -46,49 +46,92 @@ const defaultProfile: UserProfile = {
 };
 
 export default function App() {
-  const isSharedView = new URLSearchParams(window.location.search).get('shared') === 'true';
-
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    // Try to load from URL hash first
-    if (window.location.hash) {
-      try {
-        const hashData = decodeURIComponent(atob(window.location.hash.substring(1)));
-        return JSON.parse(hashData);
-      } catch (e) {
-        console.error('Failed to parse profile from URL', e);
-      }
-    }
-    // Fallback to local storage
-    const saved = localStorage.getItem('visitingCardProfile');
-    return saved ? JSON.parse(saved) : defaultProfile;
-  });
+  const urlParams = new URLSearchParams(window.location.search);
+  const sharedId = urlParams.get('id');
+  const isSharedView = urlParams.get('shared') === 'true';
   
-  // If we loaded from URL, we should default to Preview mode
-  const [isEditing, setIsEditing] = useState(!window.location.hash && !isSharedView);
+  // Detect slug from path (e.g., /TheNationalTailors)
+  const path = window.location.pathname.substring(1);
+  const slugFromPath = path && !path.includes('/') && !path.startsWith('api') ? path : null;
+  const identifier = sharedId || slugFromPath;
+
+  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
+  const [loading, setLoading] = useState(!!identifier);
+  
+  // If we have an identifier, we should default to Preview mode
+  const [isEditing, setIsEditing] = useState(!identifier && !isSharedView);
 
   useEffect(() => {
-    if (isSharedView) return; // Don't update local storage or hash if we are just viewing a shared card
+    async function loadProfile() {
+      if (identifier) {
+        try {
+          const response = await fetch(`/api/profiles/${identifier}`);
+          if (response.ok) {
+            const data = await response.json();
+            setProfile(data);
+          } else {
+            console.error('Failed to fetch profile');
+          }
+        } catch (e) {
+          console.error('Error loading profile:', e);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        // Fallback to local storage if no identifier
+        const saved = localStorage.getItem('visitingCardProfile');
+        if (saved) {
+          try {
+            setProfile(JSON.parse(saved));
+          } catch (e) {
+            console.error('Failed to parse saved profile', e);
+          }
+        }
+      }
+    }
+    loadProfile();
+  }, [identifier]);
+
+  useEffect(() => {
+    if (isSharedView || identifier) return; // Don't update local storage if we are just viewing a shared card
 
     // Save to local storage
     localStorage.setItem('visitingCardProfile', JSON.stringify(profile));
-    
-    // Update URL hash so the current URL is shareable
-    const encodedProfile = btoa(encodeURIComponent(JSON.stringify(profile)));
-    window.history.replaceState(null, '', `#${encodedProfile}`);
-  }, [profile, isSharedView]);
+  }, [profile, isSharedView, identifier]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   if (isSharedView) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center py-8">
-        <PreviewCard profile={profile} />
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center sm:py-8 relative overflow-hidden">
+        {/* Elegant background graphics */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+          <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-gradient-to-br from-purple-300/30 to-indigo-300/30 blur-3xl mix-blend-multiply"></div>
+          <div className="absolute top-[10%] -right-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-pink-300/30 to-orange-300/30 blur-3xl mix-blend-multiply"></div>
+          <div className="absolute -bottom-[20%] left-[10%] w-[80%] h-[80%] rounded-full bg-gradient-to-br from-blue-300/30 to-cyan-300/30 blur-3xl mix-blend-multiply"></div>
+        </div>
+        <PreviewCard profile={profile} isSharedView={true} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-900 relative overflow-hidden">
+      {/* Elegant background graphics */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none fixed">
+        <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-gradient-to-br from-purple-300/30 to-indigo-300/30 blur-3xl mix-blend-multiply"></div>
+        <div className="absolute top-[10%] -right-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-pink-300/30 to-orange-300/30 blur-3xl mix-blend-multiply"></div>
+        <div className="absolute -bottom-[20%] left-[10%] w-[80%] h-[80%] rounded-full bg-gradient-to-br from-blue-300/30 to-cyan-300/30 blur-3xl mix-blend-multiply"></div>
+      </div>
+
       {/* Navigation Bar */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+      <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex-shrink-0 flex items-center gap-2">
@@ -140,7 +183,7 @@ export default function App() {
           {/* Preview Section */}
           <div className={`w-full lg:w-1/2 flex justify-center sticky top-24 transition-all duration-300 ${!isEditing ? 'block' : 'hidden lg:block'}`}>
             <div className="w-full max-w-md transform transition-transform duration-500 hover:scale-[1.02]">
-              <PreviewCard profile={profile} />
+              <PreviewCard profile={profile} isSharedView={false} onProfileUpdate={setProfile} />
             </div>
           </div>
         </div>

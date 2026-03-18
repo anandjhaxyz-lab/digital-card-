@@ -13,6 +13,7 @@ export interface GalleryItem {
 }
 
 export interface UserProfile {
+  id?: string;
   name: string;
   title: string;
   company: string;
@@ -30,6 +31,7 @@ export interface UserProfile {
   avatarUrl: string;
   coverUrl: string;
   themeColor: string;
+  slug?: string;
   services: Service[];
   gallery: GalleryItem[];
 }
