@@ -82,7 +82,7 @@ export default function PreviewCard({ profile, isSharedView = false, onProfileUp
     }
 
     const fullNumber = `${countryCode.replace('+', '')}${sharePhone.replace(/\D/g, '')}`;
-    const text = `Hello! Check out my digital visiting card: ${shareUrl}`;
+    const text = `Card Link: ${shareUrl}`;
     window.open(`https://wa.me/${fullNumber}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
