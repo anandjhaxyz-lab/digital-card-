@@ -57,8 +57,8 @@ export default function App() {
 
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [loading, setLoading] = useState(!!identifier);
+  const [isEditing, setIsEditing] = useState(false);
   
-  // If we have an identifier, we should default to Preview mode
   const [isEditing, setIsEditing] = useState(!identifier && !isSharedView);
 
   useEffect(() => {
