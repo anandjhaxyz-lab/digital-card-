@@ -1,104 +1,217 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import Database from 'better-sqlite3';
-import { randomBytes } from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const db = new Database(path.join(__dirname, 'profiles.db'));
 
-// Initialize database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS profiles (
-    id TEXT PRIMARY KEY,
-    slug TEXT UNIQUE,
-    data TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// ─── Supabase Clients ─────────────────────────────────────────
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Migration: Add slug column if it doesn't exist
-try {
-  db.exec('ALTER TABLE profiles ADD COLUMN slug TEXT');
-} catch (e) {
-  // Column already exists or other error
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Missing Supabase environment variables. Check .env.local');
+  process.exit(1);
 }
 
-try {
-  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_slug ON profiles(slug)');
-} catch (e) {
-  // Index already exists or other error
+// Admin client — bypasses RLS (only used server-side)
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+// Public client — used to verify user JWT tokens
+const supabasePublic = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─── Auth Middleware ──────────────────────────────────────────
+async function requireAuth(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Login karo pehle. Authorization header missing.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const { data, error } = await supabasePublic.auth.getUser(token);
+
+  if (error || !data?.user) {
+    return res.status(401).json({ error: 'Invalid token. Please login again.' });
+  }
+
+  (req as any).user = data.user;
+  next();
 }
 
-const insertProfile = db.prepare('INSERT INTO profiles (id, slug, data) VALUES (?, ?, ?)');
-const updateProfile = db.prepare('UPDATE profiles SET data = ?, slug = ? WHERE id = ?');
-const getProfileById = db.prepare('SELECT data FROM profiles WHERE id = ?');
-const getProfileBySlug = db.prepare('SELECT data FROM profiles WHERE slug = ?');
-
+// ─── Server ───────────────────────────────────────────────────
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json({ limit: '5mb' }));
 
-  // API Routes
-  app.post('/api/profiles', (req, res) => {
-    try {
-      const profileData = req.body;
-      const id = profileData.id;
-      const slug = profileData.slug?.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
-      
-      // Check if slug is already taken by ANOTHER profile
-      if (slug) {
-        const existing = db.prepare('SELECT id FROM profiles WHERE slug = ?').get(slug) as { id: string } | undefined;
-        if (existing && existing.id !== id) {
-          return res.status(400).json({ error: 'This custom link is already taken.' });
-        }
-      }
+  // ── Auth Routes ────────────────────────────────────────────
 
-      const data = JSON.stringify(profileData);
-      
-      if (id) {
-        // Try to update existing profile
-        const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(id) as { id: string } | undefined;
-        if (existing) {
-          updateProfile.run(data, slug || null, id);
-          return res.json({ id, slug });
-        }
-      }
-
-      // Create new profile
-      const newId = randomBytes(4).toString('hex');
-      insertProfile.run(newId, slug || null, data);
-      res.json({ id: newId, slug });
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      res.status(500).json({ error: 'Failed to save profile' });
-    }
+  // GET /auth/google — Returns Google OAuth URL for frontend to redirect to
+  app.get('/auth/google', async (req, res) => {
+    const origin = req.headers.origin || `http://localhost:${PORT}`;
+    const { data, error } = await supabasePublic.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${origin}/auth/callback`,
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ url: data.url });
   });
 
-  app.get('/api/profiles/:identifier', (req, res) => {
+  // GET /auth/me — Returns current user info from JWT
+  app.get('/auth/me', requireAuth, (req, res) => {
+    const user = (req as any).user;
+    res.json({
+      id: user.id,
+      email: user.email,
+      name: user.user_metadata?.full_name,
+      avatar: user.user_metadata?.avatar_url,
+    });
+  });
+
+  // ── Card Routes ────────────────────────────────────────────
+
+  // GET /api/profiles/:identifier — Public: get card by id or slug
+  app.get('/api/profiles/:identifier', async (req, res) => {
     try {
-      const identifier = req.params.identifier;
-      // Try by slug first, then by ID
-      let row = getProfileBySlug.get(identifier) as { data: string } | undefined;
-      if (!row) {
-        row = getProfileById.get(identifier) as { data: string } | undefined;
+      const { identifier } = req.params;
+
+      // Try by slug first
+      let { data, error } = await supabaseAdmin
+        .from('cards')
+        .select('*')
+        .eq('slug', identifier)
+        .single();
+
+      // If not found, try by id
+      if (!data) {
+        ({ data, error } = await supabaseAdmin
+          .from('cards')
+          .select('*')
+          .eq('id', identifier)
+          .single());
       }
 
-      if (row) {
-        res.json(JSON.parse(row.data));
-      } else {
-        res.status(404).json({ error: 'Profile not found' });
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
+      if (!data) return res.status(404).json({ error: 'Profile not found' });
+
+      res.json(data.profile_data);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
       res.status(500).json({ error: 'Failed to fetch profile' });
     }
   });
 
-  // Vite middleware for development
+  // GET /api/profiles/me/card — Auth: get my own card
+  app.get('/api/profiles/me/card', requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('cards')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!data) return res.status(404).json({ error: 'Card not found. Please create one.' });
+      res.json(data.profile_data);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch your card' });
+    }
+  });
+
+  // POST /api/profiles — Auth: create or update MY card only
+  app.post('/api/profiles', requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    try {
+      const profileData = req.body;
+      const slug = profileData.slug?.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') || null;
+
+      // Check if slug is taken by ANOTHER user
+      if (slug) {
+        const { data: existing } = await supabaseAdmin
+          .from('cards')
+          .select('user_id')
+          .eq('slug', slug)
+          .single();
+
+        if (existing && existing.user_id !== user.id) {
+          return res.status(400).json({ error: 'Yeh custom link pehle se liya hua hai.' });
+        }
+      }
+
+      // Check if user already has a card
+      const { data: existingCard } = await supabaseAdmin
+        .from('cards')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (existingCard) {
+        // UPDATE existing card (user can only update their own)
+        const { data, error } = await supabaseAdmin
+          .from('cards')
+          .update({
+            slug,
+            profile_data: profileData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', user.id) // ← ownership enforced here
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.json({ id: data.id, slug: data.slug });
+      } else {
+        // INSERT new card
+        const { data, error } = await supabaseAdmin
+          .from('cards')
+          .insert({
+            user_id: user.id,
+            slug,
+            profile_data: {
+              ...profileData,
+              email: profileData.email || user.email, // auto-fill from Google
+            },
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.json({ id: data.id, slug: data.slug });
+      }
+    } catch (err: any) {
+      console.error('Error saving profile:', err);
+      res.status(500).json({ error: err.message || 'Failed to save profile' });
+    }
+  });
+
+  // DELETE /api/profiles/me — Auth: delete my card only
+  app.delete('/api/profiles/me', requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    try {
+      await supabaseAdmin
+        .from('cards')
+        .delete()
+        .eq('user_id', user.id); // ← only deletes user's own card
+
+      res.json({ message: 'Card deleted successfully.' });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete card' });
+    }
+  });
+
+  // ── Vite / Static ──────────────────────────────────────────
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -109,18 +222,18 @@ async function startServer() {
     app.use(express.static(path.join(__dirname, 'dist')));
   }
 
-  // Catch-all route to serve the app for vanity URLs
   app.get('*', (req, res) => {
     if (process.env.NODE_ENV === 'production') {
       res.sendFile(path.join(__dirname, 'dist/index.html'));
     } else {
-      // In dev mode, Vite middleware handles this, but we can explicitly point to index.html if needed
       res.sendFile(path.join(__dirname, 'index.html'));
     }
   });
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`🔐 Google Auth: enabled via Supabase`);
+    console.log(`🛡️  Ownership protection: enabled`);
   });
 }
 
