@@ -137,17 +137,23 @@ async function startServer() {
   });
 
   // ── Vite / Static ──────────────────────────────────────────
-  if (process.env.NODE_ENV !== 'production') {
+  // ── Vite / Static ──────────────────────────────────────────
+  const distPath = path.join(process.cwd(), 'dist');
+
+  if (process.env.NODE_ENV === 'production') {
+    // Railway par 'dist' folder serve karega
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    // Railway par 'dist' folder serve karega
-    app.use(express.static(path.join(__dirname, 'dist')));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, 'dist/index.html'));
+      res.sendFile(path.join(process.cwd(), 'index.html'));
     });
   }
 
