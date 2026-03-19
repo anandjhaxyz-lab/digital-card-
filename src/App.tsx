@@ -59,7 +59,7 @@ export default function App() {
   const [loading, setLoading] = useState(!!identifier);
   const [isEditing, setIsEditing] = useState(false);
   
-  const [isEditing, setIsEditing] = useState(!identifier && !isSharedView);
+  
 
   useEffect(() => {
     async function loadProfile() {
