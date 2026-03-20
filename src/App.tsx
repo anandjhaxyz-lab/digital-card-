@@ -43,7 +43,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Auth state check
+  // Auth check
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -57,65 +57,73 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ✅ Profile load — server se (har device pe same data)
+  // Profile load
   useEffect(() => {
+    if (authLoading) return;
+
     async function loadProfile() {
-      if (identifier) {
-        // Shared/public view — kisi ka bhi card
-        try {
+      try {
+        // Shared/public card dekh rahe hain
+        if (identifier) {
           const response = await fetch(`/api/profiles/${identifier}`);
+          if (response.ok) setProfile(await response.json());
+          setLoading(false);
+          return;
+        }
+
+        // Logged in user ka apna card load karo
+        if (user) {
+          const session = await supabase.auth.getSession();
+          const token = session.data.session?.access_token;
+          const response = await fetch('/api/profiles/me/card', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           if (response.ok) {
-            const data = await response.json();
-            setProfile(data.profile_data || data);
+            setProfile(await response.json());
+          } else {
+            // Naya user — email pre-fill karo
+            setProfile(prev => ({ ...prev, email: user.email || '' }));
           }
-        } catch (e) {
-          console.error('Error loading profile:', e);
-        } finally {
-          setLoading(false);
         }
-      } else if (user) {
-        // ✅ Logged in — server se apna card lo
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            const response = await fetch('/api/profiles/me/card', {
-              headers: {
-                'Authorization': `Bearer ${session.access_token}`
-              }
-            });
-            if (response.ok) {
-              const data = await response.json();
-              setProfile(data.profile_data || data);
-            }
-            // 404 = nayi card, default profile rahega
-          }
-        } catch (e) {
-          console.error('Error loading profile:', e);
-        } finally {
-          setLoading(false);
-        }
-      } else {
+      } catch (e) {
+        console.error('Error loading profile:', e);
+      } finally {
         setLoading(false);
       }
     }
 
-    if (!authLoading) {
-      loadProfile();
+    loadProfile();
+  }, [identifier, user, authLoading]);
+
+  // Profile save to Supabase
+  const handleProfileChange = async (updatedProfile: UserProfile) => {
+    setProfile(updatedProfile);
+    if (!user) return;
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      await fetch('/api/profiles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedProfile)
+      });
+    } catch (e) {
+      console.error('Save failed:', e);
     }
-  }, [identifier, user, authLoading]); // ✅ user change pe reload
+  };
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: window.location.origin
-      }
+      options: { redirectTo: window.location.origin }
     });
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setProfile(defaultProfile);
   };
 
   // Loading
@@ -127,7 +135,7 @@ export default function App() {
     );
   }
 
-  // Shared View
+  // Shared/Public View
   if (isSharedView || identifier) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center sm:py-8 relative overflow-hidden">
@@ -145,12 +153,9 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
         <div className="bg-white rounded-3xl shadow-xl p-10 max-w-md w-full mx-4 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6">
-            V
-          </div>
+          <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6">V</div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">VisitCard</h1>
           <p className="text-gray-500 mb-8">Apna Digital Visiting Card banao aur share karo</p>
-          
           <button
             onClick={handleGoogleLogin}
             className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-700 font-semibold py-4 px-6 rounded-2xl transition-all shadow-sm"
@@ -158,10 +163,7 @@ export default function App() {
             <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
             Google se Login Karo
           </button>
-
-          <p className="text-xs text-gray-400 mt-6">
-            Free mein shuru karo — koi credit card nahi chahiye
-          </p>
+          <p className="text-xs text-gray-400 mt-6">Free mein shuru karo — koi credit card nahi chahiye</p>
         </div>
       </div>
     );
@@ -175,7 +177,6 @@ export default function App() {
         <div className="absolute top-[10%] -right-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-pink-300/30 to-orange-300/30 blur-3xl"></div>
       </div>
 
-      {/* Navbar */}
       <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
@@ -183,35 +184,26 @@ export default function App() {
               <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xl">V</div>
               <span className="font-bold text-xl text-gray-900 hidden sm:block">VisitCard</span>
             </div>
-
             <div className="flex items-center gap-3">
               <div className="bg-gray-100 p-1 rounded-xl flex">
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isEditing ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                >
+                <button onClick={() => setIsEditing(true)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isEditing ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>
                   <Edit3 size={16} />
                   <span className="hidden sm:inline">Edit</span>
                 </button>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${!isEditing ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                >
+                <button onClick={() => setIsEditing(false)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${!isEditing ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>
                   <Eye size={16} />
                   <span className="hidden sm:inline">Preview</span>
                 </button>
               </div>
-
               <div className="flex items-center gap-2">
                 <img
                   src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}`}
-                  alt="User"
-                  className="w-8 h-8 rounded-full border-2 border-blue-200"
+                  alt="User" className="w-8 h-8 rounded-full border-2 border-blue-200"
                 />
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors"
-                >
+                <button onClick={handleLogout}
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors">
                   <LogOut size={16} />
                   <span className="hidden sm:inline">Logout</span>
                 </button>
@@ -221,15 +213,14 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <div className="flex flex-col lg:flex-row gap-8 items-start justify-center">
           <div className={`w-full lg:w-1/2 transition-all duration-300 ${isEditing ? 'block' : 'hidden lg:block lg:opacity-50 lg:pointer-events-none'}`}>
-            <EditForm profile={profile} onChange={setProfile} />
+            <EditForm profile={profile} onChange={handleProfileChange} />
           </div>
           <div className={`w-full lg:w-1/2 flex justify-center sticky top-24 transition-all duration-300 ${!isEditing ? 'block' : 'hidden lg:block'}`}>
             <div className="w-full max-w-md">
-              <PreviewCard profile={profile} isSharedView={false} onProfileUpdate={setProfile} />
+              <PreviewCard profile={profile} isSharedView={false} onProfileUpdate={handleProfileChange} />
             </div>
           </div>
         </div>
