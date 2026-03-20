@@ -18,9 +18,50 @@ import {
   Facebook,
   Plus,
   Trash2,
-  ChevronDown,
-  ChevronUp
 } from 'lucide-react';
+
+// ✅ InputGroup ko BAHAR rakha — ab har render pe naya component nahi banega
+interface InputGroupProps {
+  icon: React.ElementType;
+  label: string;
+  name: string;
+  type?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+}
+
+function InputGroup({ icon: Icon, label, name, type = 'text', placeholder, value, onChange }: InputGroupProps) {
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div className="relative rounded-md shadow-sm">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Icon className="h-5 w-5 text-gray-400" />
+        </div>
+        {type === 'textarea' ? (
+          <textarea
+            name={name}
+            value={value}
+            onChange={onChange}
+            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+            placeholder={placeholder}
+            rows={3}
+          />
+        ) : (
+          <input
+            type={type}
+            name={name}
+            value={value}
+            onChange={onChange}
+            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+            placeholder={placeholder}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface EditFormProps {
   profile: UserProfile;
@@ -45,36 +86,6 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
       reader.readAsDataURL(file);
     }
   };
-
-  const InputGroup = ({ icon: Icon, label, name, type = 'text', placeholder }: any) => (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <div className="relative rounded-md shadow-sm">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Icon className="h-5 w-5 text-gray-400" />
-        </div>
-        {type === 'textarea' ? (
-          <textarea
-            name={name}
-            value={profile[name as keyof UserProfile] as string || ''}
-            onChange={handleChange}
-            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
-            placeholder={placeholder}
-            rows={3}
-          />
-        ) : (
-          <input
-            type={type}
-            name={name}
-            value={profile[name as keyof UserProfile] as string || ''}
-            onChange={handleChange}
-            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
-            placeholder={placeholder}
-          />
-        )}
-      </div>
-    </div>
-  );
 
   const addService = () => {
     const newService: Service = {
@@ -145,7 +156,6 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
 
       {activeTab === 'basic' && (
         <div className="space-y-8 animate-in fade-in duration-300">
-          {/* Basic Info */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Basic Information</h3>
             <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -163,11 +173,15 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
               </div>
               <p className="mt-1 text-xs text-blue-700">This will be your personalized link (e.g., {window.location.origin}/yourname)</p>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <InputGroup icon={User} label="Full Name" name="name" placeholder="John Doe" />
-              <InputGroup icon={Briefcase} label="Job Title" name="title" placeholder="Software Engineer" />
-              <InputGroup icon={Building2} label="Company" name="company" placeholder="Acme Corp" />
-              
+              <InputGroup icon={User} label="Full Name" name="name" placeholder="John Doe"
+                value={profile.name || ''} onChange={handleChange} />
+              <InputGroup icon={Briefcase} label="Job Title" name="title" placeholder="Software Engineer"
+                value={profile.title || ''} onChange={handleChange} />
+              <InputGroup icon={Building2} label="Company" name="company" placeholder="Acme Corp"
+                value={profile.company || ''} onChange={handleChange} />
+
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Profile Picture</label>
                 <div className="flex items-center gap-4">
@@ -178,14 +192,12 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
                       <User className="w-full h-full p-2 text-gray-400" />
                     )}
                   </div>
-                  <div className="flex-1">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(e, 'avatarUrl')}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                    />
-                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'avatarUrl')}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                  />
                 </div>
               </div>
 
@@ -199,45 +211,53 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
                       <ImageIcon className="w-full h-full p-2 text-gray-400" />
                     )}
                   </div>
-                  <div className="flex-1">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(e, 'coverUrl')}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                    />
-                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'coverUrl')}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                  />
                 </div>
               </div>
             </div>
-            <InputGroup icon={User} label="Bio" name="bio" type="textarea" placeholder="A short bio about yourself..." />
+
+            <InputGroup icon={User} label="Bio" name="bio" type="textarea"
+              placeholder="A short bio about yourself..."
+              value={profile.bio || ''} onChange={handleChange} />
           </section>
 
-          {/* Contact Info */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Contact Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <InputGroup icon={Mail} label="Email Address" name="email" type="email" placeholder="john@example.com" />
-              <InputGroup icon={Phone} label="Phone Number" name="phone" type="tel" placeholder="+1 (555) 000-0000" />
-              <InputGroup icon={MessageCircle} label="WhatsApp Number" name="whatsapp" type="tel" placeholder="+15550000000" />
-              <InputGroup icon={Globe} label="Website" name="website" type="url" placeholder="https://johndoe.com" />
-              <InputGroup icon={MapPin} label="Address" name="address" placeholder="123 Main St, City, Country" />
+              <InputGroup icon={Mail} label="Email Address" name="email" type="email"
+                placeholder="john@example.com" value={profile.email || ''} onChange={handleChange} />
+              <InputGroup icon={Phone} label="Phone Number" name="phone" type="tel"
+                placeholder="+1 (555) 000-0000" value={profile.phone || ''} onChange={handleChange} />
+              <InputGroup icon={MessageCircle} label="WhatsApp Number" name="whatsapp" type="tel"
+                placeholder="+15550000000" value={profile.whatsapp || ''} onChange={handleChange} />
+              <InputGroup icon={Globe} label="Website" name="website" type="url"
+                placeholder="https://johndoe.com" value={profile.website || ''} onChange={handleChange} />
+              <InputGroup icon={MapPin} label="Address" name="address"
+                placeholder="123 Main St, City, Country" value={profile.address || ''} onChange={handleChange} />
             </div>
           </section>
 
-          {/* Social Links */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Social Links</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <InputGroup icon={Linkedin} label="LinkedIn URL" name="linkedin" type="url" placeholder="https://linkedin.com/in/johndoe" />
-              <InputGroup icon={Twitter} label="Twitter URL" name="twitter" type="url" placeholder="https://twitter.com/johndoe" />
-              <InputGroup icon={Instagram} label="Instagram URL" name="instagram" type="url" placeholder="https://instagram.com/johndoe" />
-              <InputGroup icon={Facebook} label="Facebook URL" name="facebook" type="url" placeholder="https://facebook.com/johndoe" />
-              <InputGroup icon={Youtube} label="YouTube URL" name="youtube" type="url" placeholder="https://youtube.com/c/johndoe" />
+              <InputGroup icon={Linkedin} label="LinkedIn URL" name="linkedin" type="url"
+                placeholder="https://linkedin.com/in/johndoe" value={profile.linkedin || ''} onChange={handleChange} />
+              <InputGroup icon={Twitter} label="Twitter URL" name="twitter" type="url"
+                placeholder="https://twitter.com/johndoe" value={profile.twitter || ''} onChange={handleChange} />
+              <InputGroup icon={Instagram} label="Instagram URL" name="instagram" type="url"
+                placeholder="https://instagram.com/johndoe" value={profile.instagram || ''} onChange={handleChange} />
+              <InputGroup icon={Facebook} label="Facebook URL" name="facebook" type="url"
+                placeholder="https://facebook.com/johndoe" value={profile.facebook || ''} onChange={handleChange} />
+              <InputGroup icon={Youtube} label="YouTube URL" name="youtube" type="url"
+                placeholder="https://youtube.com/c/johndoe" value={profile.youtube || ''} onChange={handleChange} />
             </div>
           </section>
 
-          {/* Appearance */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Appearance</h3>
             <div className="mb-4">
@@ -294,47 +314,34 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
                 <Trash2 size={18} />
               </button>
               <h4 className="font-medium text-gray-900 mb-4">Item #{index + 1}</h4>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
-                  <input
-                    type="text"
-                    value={service.title}
+                  <input type="text" value={service.title}
                     onChange={(e) => updateService(service.id, 'title', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g. Web Development"
-                  />
+                    placeholder="e.g. Web Development" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Price (Optional)</label>
-                  <input
-                    type="text"
-                    value={service.price || ''}
+                  <input type="text" value={service.price || ''}
                     onChange={(e) => updateService(service.id, 'price', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g. $500 or Starting at $50"
-                  />
+                    placeholder="e.g. $500" />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
-                  <textarea
-                    value={service.description}
+                  <textarea value={service.description}
                     onChange={(e) => updateService(service.id, 'description', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Describe this product or service..."
-                    rows={2}
-                  />
+                    placeholder="Describe this product or service..." rows={2} />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Image URL (Optional)</label>
-                  <input
-                    type="url"
-                    value={service.imageUrl || ''}
+                  <input type="url" value={service.imageUrl || ''}
                     onChange={(e) => updateService(service.id, 'imageUrl', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="https://example.com/image.jpg"
-                  />
+                    placeholder="https://example.com/image.jpg" />
                 </div>
               </div>
             </div>
@@ -369,18 +376,13 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
                   )}
                 </div>
                 <div className="flex-1">
-                  <input
-                    type="url"
-                    value={item.url}
+                  <input type="url" value={item.url}
                     onChange={(e) => updateGalleryItem(item.id, e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Image URL (e.g. https://example.com/photo.jpg)"
-                  />
+                    placeholder="Image URL (e.g. https://example.com/photo.jpg)" />
                 </div>
-                <button 
-                  onClick={() => removeGalleryItem(item.id)}
-                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                >
+                <button onClick={() => removeGalleryItem(item.id)}
+                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                   <Trash2 size={20} />
                 </button>
               </div>
