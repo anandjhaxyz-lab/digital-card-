@@ -7,36 +7,25 @@ import { supabase } from './supabaseClient';
 import { User } from '@supabase/supabase-js';
 
 const defaultProfile: UserProfile = {
-  name: 'Alex Morgan',
-  title: 'Senior Product Designer',
-  company: 'Design Studio Inc.',
-  bio: 'Passionate about creating intuitive and beautiful user experiences.',
-  email: 'alex.morgan@example.com',
-  phone: '+1 (555) 123-4567',
-  whatsapp: '+15551234567',
-  website: 'https://alexmorgan.design',
-  address: 'San Francisco, CA',
-  linkedin: 'https://linkedin.com/in/alexmorgan',
-  twitter: 'https://twitter.com/alexmorgan',
-  instagram: 'https://instagram.com/alexmorgan',
-  youtube: 'https://youtube.com/c/alexmorgan',
-  facebook: 'https://facebook.com/alexmorgan',
+  name: '',
+  title: '',
+  company: '',
+  bio: '',
+  email: '',
+  phone: '',
+  whatsapp: '',
+  website: '',
+  address: '',
+  linkedin: '',
+  twitter: '',
+  instagram: '',
+  youtube: '',
+  facebook: '',
   avatarUrl: '',
   coverUrl: '',
   themeColor: '#0ea5e9',
-  services: [
-    {
-      id: '1',
-      title: 'UI/UX Design',
-      description: 'Complete user interface and experience design.',
-      price: '$150/hr',
-      imageUrl: 'https://picsum.photos/seed/design/400/300'
-    }
-  ],
-  gallery: [
-    { id: '1', url: 'https://picsum.photos/seed/g1/800/600', type: 'image' },
-    { id: '2', url: 'https://picsum.photos/seed/g2/800/600', type: 'image' },
-  ]
+  services: [],
+  gallery: []
 };
 
 export default function App() {
@@ -68,15 +57,37 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Profile load karo
+  // ✅ Profile load — server se (har device pe same data)
   useEffect(() => {
     async function loadProfile() {
       if (identifier) {
+        // Shared/public view — kisi ka bhi card
         try {
           const response = await fetch(`/api/profiles/${identifier}`);
           if (response.ok) {
             const data = await response.json();
-            setProfile(data);
+            setProfile(data.profile_data || data);
+          }
+        } catch (e) {
+          console.error('Error loading profile:', e);
+        } finally {
+          setLoading(false);
+        }
+      } else if (user) {
+        // ✅ Logged in — server se apna card lo
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const response = await fetch('/api/profiles/me/card', {
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`
+              }
+            });
+            if (response.ok) {
+              const data = await response.json();
+              setProfile(data.profile_data || data);
+            }
+            // 404 = nayi card, default profile rahega
           }
         } catch (e) {
           console.error('Error loading profile:', e);
@@ -84,20 +95,14 @@ export default function App() {
           setLoading(false);
         }
       } else {
-        const saved = localStorage.getItem('visitingCardProfile');
-        if (saved) {
-          try { setProfile(JSON.parse(saved)); } catch (e) {}
-        }
         setLoading(false);
       }
     }
-    loadProfile();
-  }, [identifier]);
 
-  useEffect(() => {
-    if (isSharedView || identifier) return;
-    localStorage.setItem('visitingCardProfile', JSON.stringify(profile));
-  }, [profile, isSharedView, identifier]);
+    if (!authLoading) {
+      loadProfile();
+    }
+  }, [identifier, user, authLoading]); // ✅ user change pe reload
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
@@ -110,6 +115,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setProfile(defaultProfile);
   };
 
   // Loading
@@ -134,7 +140,7 @@ export default function App() {
     );
   }
 
-  // Login Screen — jab user login nahi hai
+  // Login Screen
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
@@ -161,7 +167,7 @@ export default function App() {
     );
   }
 
-  // Main App — logged in user ke liye
+  // Main App
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 text-gray-900 font-sans relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none fixed">
@@ -179,7 +185,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Edit/Preview Toggle */}
               <div className="bg-gray-100 p-1 rounded-xl flex">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -197,7 +202,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* User Info + Logout */}
               <div className="flex items-center gap-2">
                 <img
                   src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}`}
