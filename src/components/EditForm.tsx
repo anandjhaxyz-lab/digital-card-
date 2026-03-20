@@ -20,7 +20,6 @@ import {
   Trash2,
 } from 'lucide-react';
 
-// ✅ InputGroup ko BAHAR rakha — ab har render pe naya component nahi banega
 interface InputGroupProps {
   icon: React.ElementType;
   label: string;
@@ -74,6 +73,23 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     onChange({ ...profile, [name]: value });
+  };
+
+  // ✅ Slug fix — poora URL nahi, sirf slug
+  const getCleanSlug = (slug: string | undefined) => {
+    if (!slug) return '';
+    return slug
+      .replace(window.location.origin + '/', '')
+      .replace(window.location.origin, '')
+      .replace(/^\/+/, '');
+  };
+
+  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cleanValue = e.target.value
+      .replace(window.location.origin + '/', '')
+      .replace(window.location.origin, '')
+      .replace(/^\/+/, '');
+    onChange({ ...profile, slug: cleanValue });
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'avatarUrl' | 'coverUrl') => {
@@ -158,20 +174,26 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
         <div className="space-y-8 animate-in fade-in duration-300">
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Basic Information</h3>
+            
+            {/* ✅ Custom Card Link — Fix Applied */}
             <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
               <label className="block text-sm font-bold text-blue-900 mb-1">Custom Card Link</label>
               <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                <span className="pl-3 text-gray-400 text-sm whitespace-nowrap">{window.location.origin}/</span>
+                <span className="pl-3 text-gray-400 text-sm whitespace-nowrap shrink-0">
+                  {window.location.origin}/
+                </span>
                 <input 
                   type="text" 
                   name="slug"
-                  value={profile.slug || ''}
-                  onChange={handleChange}
+                  value={getCleanSlug(profile.slug)}
+                  onChange={handleSlugChange}
                   placeholder="TheNationalTailors"
-                  className="w-full py-2 px-1 text-sm focus:outline-none font-medium"
+                  className="w-full py-2 px-1 text-sm focus:outline-none font-medium min-w-0"
                 />
               </div>
-              <p className="mt-1 text-xs text-blue-700">This will be your personalized link (e.g., {window.location.origin}/yourname)</p>
+              <p className="mt-1 text-xs text-blue-700">
+                This will be your personalized link (e.g., {window.location.origin}/yourname)
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
