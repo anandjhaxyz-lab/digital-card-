@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   User
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface PreviewCardProps {
   profile: UserProfile;
@@ -37,15 +38,25 @@ export default function PreviewCard({ profile, isSharedView = false, onProfileUp
   const saveProfile = async () => {
     setIsSaving(true);
     try {
+      // ✅ Auth token lo Supabase se
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('Pehle login karo!');
+        return null;
+      }
+
       const response = await fetch('/api/profiles', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`, // ✅ Token add kiya
+        },
         body: JSON.stringify(profile),
       });
+
       if (response.ok) {
         const { id, slug } = await response.json();
         
-        // Update local profile with the ID from server
         if (onProfileUpdate && profile.id !== id) {
           onProfileUpdate({ ...profile, id });
         }
