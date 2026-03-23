@@ -72,7 +72,7 @@ export default function PreviewCard({ profile, isSharedView = false, onProfileUp
     const cleaned = sharePhone.replace(/\D/g, '');
     const fullNumber = `${countryCode.replace('+', '')}${cleaned}`;
     const text = encodeURIComponent(`Mera Digital Visiting Card dekhein: ${shareUrl}`);
-    window.open(`https://wa.me/${fullNumber}?text=${text}`, '_blank');
+    window.location.href = `whatsapp://send?phone=${fullNumber}&text=${text}`;
   };
 
   const handleShowQR = async () => {
