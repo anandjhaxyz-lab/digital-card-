@@ -11,6 +11,7 @@ import {
   Linkedin, 
   Twitter, 
   Instagram, 
+  Link,
   Image as ImageIcon,
   Palette,
   MessageCircle,
@@ -18,89 +19,121 @@ import {
   Facebook,
   Plus,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  Save
 } from 'lucide-react';
-
-interface InputGroupProps {
-  icon: React.ElementType;
-  label: string;
-  name: string;
-  type?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-}
-
-function InputGroup({ icon: Icon, label, name, type = 'text', placeholder, value, onChange }: InputGroupProps) {
-  return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <div className="relative rounded-md shadow-sm">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Icon className="h-5 w-5 text-gray-400" />
-        </div>
-        {type === 'textarea' ? (
-          <textarea
-            name={name}
-            value={value}
-            onChange={onChange}
-            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
-            placeholder={placeholder}
-            rows={3}
-          />
-        ) : (
-          <input
-            type={type}
-            name={name}
-            value={value}
-            onChange={onChange}
-            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
-            placeholder={placeholder}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
 
 interface EditFormProps {
   profile: UserProfile;
-  onChange: (profile: UserProfile) => void;
+  onChange: (update: UserProfile | ((prev: UserProfile) => UserProfile)) => void;
+  onSave?: () => void;
+  isSaving?: boolean;
 }
 
-export default function EditForm({ profile, onChange }: EditFormProps) {
+interface InputGroupProps {
+  icon: any;
+  label: string;
+  name: string;
+  profile: UserProfile;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  type?: string;
+  placeholder?: string;
+}
+
+const InputGroup = ({ icon: Icon, label, name, type = 'text', placeholder, profile, onChange }: InputGroupProps) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <div className="relative rounded-md shadow-sm">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Icon className="h-5 w-5 text-gray-400" />
+      </div>
+      {type === 'textarea' ? (
+        <textarea
+          name={name}
+          value={profile[name as keyof UserProfile] as string || ''}
+          onChange={onChange}
+          className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+          placeholder={placeholder}
+          rows={3}
+        />
+      ) : (
+        <input
+          type={type}
+          name={name}
+          value={profile[name as keyof UserProfile] as string || ''}
+          onChange={onChange}
+          className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+          placeholder={placeholder}
+        />
+      )}
+    </div>
+  </div>
+);
+
+export default function EditForm({ profile, onChange, onSave, isSaving }: EditFormProps) {
   const [activeTab, setActiveTab] = useState<'basic' | 'services' | 'gallery'>('basic');
+  const [isUploading, setIsUploading] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    onChange({ ...profile, [name]: value });
-  };
-
-  // ✅ Slug fix — poora URL nahi, sirf slug
-  const getCleanSlug = (slug: string | undefined) => {
-    if (!slug) return '';
-    return slug
-      .replace(window.location.origin + '/', '')
-      .replace(window.location.origin, '')
-      .replace(/^\/+/, '');
-  };
-
-  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const cleanValue = e.target.value
-      .replace(window.location.origin + '/', '')
-      .replace(window.location.origin, '')
-      .replace(/^\/+/, '');
-    onChange({ ...profile, slug: cleanValue });
+    onChange(prev => ({ ...prev, [name]: value }));
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'avatarUrl' | 'coverUrl') => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsUploading(field);
       const reader = new FileReader();
       reader.onloadend = () => {
-        onChange({ ...profile, [field]: reader.result as string });
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Max dimensions
+          const MAX_WIDTH = field === 'avatarUrl' ? 400 : 1200;
+          const MAX_HEIGHT = field === 'avatarUrl' ? 400 : 800;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // Compress to JPEG
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          onChange(prev => ({ ...prev, [field]: dataUrl }));
+          setIsUploading(null);
+        };
+        img.onerror = () => {
+          console.error('Error loading image for compression');
+          setIsUploading(null);
+        };
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => {
+        console.error('Error reading file');
+        setIsUploading(null);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const removeImage = (field: 'avatarUrl' | 'coverUrl') => {
+    onChange(prev => ({ ...prev, [field]: '' }));
   };
 
   const addService = () => {
@@ -172,114 +205,121 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
 
       {activeTab === 'basic' && (
         <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Basic Info */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Basic Information</h3>
-            
-            {/* ✅ Custom Card Link — Fix Applied */}
-            <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <label className="block text-sm font-bold text-blue-900 mb-1">Custom Card Link</label>
-              <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                <span className="pl-3 text-gray-400 text-sm whitespace-nowrap shrink-0">
-                  {window.location.origin}/
-                </span>
-                <input 
-                  type="text" 
-                  name="slug"
-                  value={getCleanSlug(profile.slug)}
-                  onChange={handleSlugChange}
-                  placeholder="TheNationalTailors"
-                  className="w-full py-2 px-1 text-sm focus:outline-none font-medium min-w-0"
-                />
-              </div>
-              <p className="mt-1 text-xs text-blue-700">
-                This will be your personalized link (e.g., {window.location.origin}/yourname)
-              </p>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <InputGroup icon={User} label="Full Name" name="name" placeholder="John Doe"
-                value={profile.name || ''} onChange={handleChange} />
-              <InputGroup icon={Briefcase} label="Job Title" name="title" placeholder="Software Engineer"
-                value={profile.title || ''} onChange={handleChange} />
-              <InputGroup icon={Building2} label="Company" name="company" placeholder="Acme Corp"
-                value={profile.company || ''} onChange={handleChange} />
-
+              <div className="md:col-span-2">
+                <InputGroup 
+                  icon={Link} 
+                  label="Custom Card Link (Slug)" 
+                  name="slug" 
+                  placeholder="yourname-or-business" 
+                  profile={profile}
+                  onChange={handleChange}
+                />
+                <p className="text-[10px] text-gray-500 -mt-3 mb-4 ml-1">
+                  Your link will be: {window.location.origin}/{profile.slug || 'slug'}
+                </p>
+              </div>
+              <InputGroup icon={User} label="Full Name" name="name" placeholder="John Doe" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Briefcase} label="Job Title" name="title" placeholder="Software Engineer" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Building2} label="Company" name="company" placeholder="Acme Corp" profile={profile} onChange={handleChange} />
+              
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Profile Picture</label>
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
-                    {profile.avatarUrl ? (
-                      <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 relative group">
+                    {isUploading === 'avatarUrl' ? (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      </div>
+                    ) : profile.avatarUrl ? (
+                      <>
+                        <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => removeImage('avatarUrl')}
+                          className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
                     ) : (
                       <User className="w-full h-full p-2 text-gray-400" />
                     )}
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 'avatarUrl')}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                  />
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'avatarUrl')}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cover Picture</label>
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-12 rounded bg-gray-200 overflow-hidden flex-shrink-0">
-                    {profile.coverUrl ? (
-                      <img src={profile.coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                  <div className="w-16 h-12 rounded bg-gray-200 overflow-hidden flex-shrink-0 relative group">
+                    {isUploading === 'coverUrl' ? (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      </div>
+                    ) : profile.coverUrl ? (
+                      <>
+                        <img src={profile.coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => removeImage('coverUrl')}
+                          className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
                     ) : (
                       <ImageIcon className="w-full h-full p-2 text-gray-400" />
                     )}
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 'coverUrl')}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                  />
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'coverUrl')}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-
-            <InputGroup icon={User} label="Bio" name="bio" type="textarea"
-              placeholder="A short bio about yourself..."
-              value={profile.bio || ''} onChange={handleChange} />
+            <InputGroup icon={User} label="Bio" name="bio" type="textarea" placeholder="A short bio about yourself..." profile={profile} onChange={handleChange} />
           </section>
 
+          {/* Contact Info */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Contact Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <InputGroup icon={Mail} label="Email Address" name="email" type="email"
-                placeholder="john@example.com" value={profile.email || ''} onChange={handleChange} />
-              <InputGroup icon={Phone} label="Phone Number" name="phone" type="tel"
-                placeholder="+1 (555) 000-0000" value={profile.phone || ''} onChange={handleChange} />
-              <InputGroup icon={MessageCircle} label="WhatsApp Number" name="whatsapp" type="tel"
-                placeholder="+15550000000" value={profile.whatsapp || ''} onChange={handleChange} />
-              <InputGroup icon={Globe} label="Website" name="website" type="url"
-                placeholder="https://johndoe.com" value={profile.website || ''} onChange={handleChange} />
-              <InputGroup icon={MapPin} label="Address" name="address"
-                placeholder="123 Main St, City, Country" value={profile.address || ''} onChange={handleChange} />
+              <InputGroup icon={Mail} label="Email Address" name="email" type="email" placeholder="john@example.com" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Phone} label="Phone Number" name="phone" type="tel" placeholder="+1 (555) 000-0000" profile={profile} onChange={handleChange} />
+              <InputGroup icon={MessageCircle} label="WhatsApp Number" name="whatsapp" type="tel" placeholder="+15550000000" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Globe} label="Website" name="website" type="url" placeholder="https://johndoe.com" profile={profile} onChange={handleChange} />
+              <InputGroup icon={MapPin} label="Address" name="address" placeholder="123 Main St, City, Country" profile={profile} onChange={handleChange} />
             </div>
           </section>
 
+          {/* Social Links */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Social Links</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <InputGroup icon={Linkedin} label="LinkedIn URL" name="linkedin" type="url"
-                placeholder="https://linkedin.com/in/johndoe" value={profile.linkedin || ''} onChange={handleChange} />
-              <InputGroup icon={Twitter} label="Twitter URL" name="twitter" type="url"
-                placeholder="https://twitter.com/johndoe" value={profile.twitter || ''} onChange={handleChange} />
-              <InputGroup icon={Instagram} label="Instagram URL" name="instagram" type="url"
-                placeholder="https://instagram.com/johndoe" value={profile.instagram || ''} onChange={handleChange} />
-              <InputGroup icon={Facebook} label="Facebook URL" name="facebook" type="url"
-                placeholder="https://facebook.com/johndoe" value={profile.facebook || ''} onChange={handleChange} />
-              <InputGroup icon={Youtube} label="YouTube URL" name="youtube" type="url"
-                placeholder="https://youtube.com/c/johndoe" value={profile.youtube || ''} onChange={handleChange} />
+              <InputGroup icon={Linkedin} label="LinkedIn URL" name="linkedin" type="url" placeholder="https://linkedin.com/in/johndoe" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Twitter} label="Twitter URL" name="twitter" type="url" placeholder="https://twitter.com/johndoe" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Instagram} label="Instagram URL" name="instagram" type="url" placeholder="https://instagram.com/johndoe" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Facebook} label="Facebook URL" name="facebook" type="url" placeholder="https://facebook.com/johndoe" profile={profile} onChange={handleChange} />
+              <InputGroup icon={Youtube} label="YouTube URL" name="youtube" type="url" placeholder="https://youtube.com/c/johndoe" profile={profile} onChange={handleChange} />
             </div>
           </section>
 
+          {/* Appearance */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2 mb-4">Appearance</h3>
             <div className="mb-4">
@@ -336,34 +376,47 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
                 <Trash2 size={18} />
               </button>
               <h4 className="font-medium text-gray-900 mb-4">Item #{index + 1}</h4>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
-                  <input type="text" value={service.title}
+                  <input
+                    type="text"
+                    value={service.title}
                     onChange={(e) => updateService(service.id, 'title', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g. Web Development" />
+                    placeholder="e.g. Web Development"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Price (Optional)</label>
-                  <input type="text" value={service.price || ''}
+                  <input
+                    type="text"
+                    value={service.price || ''}
                     onChange={(e) => updateService(service.id, 'price', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g. $500" />
+                    placeholder="e.g. $500 or Starting at $50"
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
-                  <textarea value={service.description}
+                  <textarea
+                    value={service.description}
                     onChange={(e) => updateService(service.id, 'description', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Describe this product or service..." rows={2} />
+                    placeholder="Describe this product or service..."
+                    rows={2}
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Image URL (Optional)</label>
-                  <input type="url" value={service.imageUrl || ''}
+                  <input
+                    type="url"
+                    value={service.imageUrl || ''}
                     onChange={(e) => updateService(service.id, 'imageUrl', e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="https://example.com/image.jpg" />
+                    placeholder="https://example.com/image.jpg"
+                  />
                 </div>
               </div>
             </div>
@@ -398,18 +451,43 @@ export default function EditForm({ profile, onChange }: EditFormProps) {
                   )}
                 </div>
                 <div className="flex-1">
-                  <input type="url" value={item.url}
+                  <input
+                    type="url"
+                    value={item.url}
                     onChange={(e) => updateGalleryItem(item.id, e.target.value)}
                     className="w-full text-sm border-gray-300 rounded-md py-2 px-3 border focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Image URL (e.g. https://example.com/photo.jpg)" />
+                    placeholder="Image URL (e.g. https://example.com/photo.jpg)"
+                  />
                 </div>
-                <button onClick={() => removeGalleryItem(item.id)}
-                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                <button 
+                  onClick={() => removeGalleryItem(item.id)}
+                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                >
                   <Trash2 size={20} />
                 </button>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {onSave && (
+        <div className="mt-8 pt-6 border-t border-gray-100">
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+            ) : (
+              <Save size={24} />
+            )}
+            {isSaving ? 'Saving Changes...' : 'Save All Changes'}
+          </button>
+          <p className="text-center text-xs text-gray-500 mt-3">
+            Your changes will be saved to your digital profile.
+          </p>
         </div>
       )}
     </div>

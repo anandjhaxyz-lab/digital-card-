@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation date" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "Digital visiting card data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Profile ID" },
+        "ownerUid": { "type": "string", "description": "UID of the user who owns this profile" },
+        "slug": { "type": "string", "description": "Vanity URL slug" },
+        "data": { "type": "object", "description": "JSON representation of the card data" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["id", "ownerUid", "data"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User documents containing profile status"
+    },
+    "/profiles/{profileId}": {
+      "schema": "Profile",
+      "description": "Digital visiting card profiles"
+    },
+    "/slugs/{slug}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "profileId": { "type": "string" }
+        }
+      },
+      "description": "Mapping of slugs to profile IDs for vanity URLs"
+    }
+  }
+}

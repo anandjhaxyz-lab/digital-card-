@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isProfileOwner(profileId) {
+      return isAuthenticated() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+    }
+
+    // Digital visiting cards
+    match /profiles/{profileId} {
+      allow read: if true; // Publicly viewable
+      allow create: if isAuthenticated();
+      allow update: if isProfileOwner(profileId);
+      allow delete: if isProfileOwner(profileId);
+    }
+
+    // Slug mapping
+    match /slugs/{slug} {
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+  }
+}

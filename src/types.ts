@@ -32,6 +32,7 @@ export interface UserProfile {
   coverUrl: string;
   themeColor: string;
   slug?: string;
+  ownerUid?: string;
   services: Service[];
   gallery: GalleryItem[];
 }
